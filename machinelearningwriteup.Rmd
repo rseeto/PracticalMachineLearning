@@ -1,0 +1,68 @@
+Practical Machine Learning Project - Writeup
+========================================================
+
+### Introduction
+This project is part of the Johns Hopkins/Coursera course "Practical Machine Learning" (January 2015).  This project used data from a study by [Velloso et al. (2013)](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) which investigated the quality of weight lifting exercises.  In the aforementioned study, sensors were placed on a belt, glove, arm-band, and dumbbell while participants did unilateral dumbbell biceps curls, which were then evaluated.  Each exercise was evaluated and placed into one of five classes: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D), and throwing the hips to the front (Class E).  Given a training data set, the purpose of this assignment was to use machine learning to predict 20 different test cases.
+
+### Methodology
+```{r echo = FALSE}
+require(doParallel)
+registerDoParallel(4)
+```
+
+The 'caret' package was required for this project.
+```{r}
+require(caret)
+```
+
+Both the project training and test data set were loaded into R.
+```{r}
+projectdatatrain <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+projectdatatest <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+Unnecessary columns were deleted from both the training and test data.  The ommited columns were deleted based on the fact that:   
+(1) there was a significant number of 'NAs' in the deleted columns of the training set which meant there was likely low predictive value of the deleted columns  
+(2) the deleted columns were not in the testing set which meant that a model containing these variables would be inappropriate
+```{r}
+projectdatatest_woNA <- projectdatatest[, colSums(is.na(projectdatatest))<nrow(projectdatatest)]
+testcol <- colnames(projectdatatest_woNA)
+projectdatatrain_clean <- projectdatatrain[, colnames(projectdatatrain) %in% testcol]
+```
+
+The data frame was further cleaned by adding the "classe" column and removing incomplete cases.  In addition, the first 8 columns were deleted as it was believed that they did not offer any predictive power.
+```{r}
+projectdatatrain_clean <- cbind(projectdatatrain_clean, projectdatatrain$classe)
+names(projectdatatrain_clean)[60] <- "classe"
+projectdatatrain_clean <- projectdatatrain_clean[complete.cases(projectdatatrain_clean), ]
+projectdatatrain_clean <- projectdatatrain_clean[, 8:60]
+```
+
+The training data set was further subdivided into a training and testing data set. A machine learning algorithm could be created from the subdivided training set and confirmed on the subdivided testing set.
+```{r}
+inTrain <- createDataPartition (y = projectdatatrain_clean$classe, p = 0.6, list = FALSE)
+training <- projectdatatrain_clean[inTrain, ]
+testing <- projectdatatrain_clean[-inTrain, ]
+```
+
+The random forest method was used to produce the model as it provides a high degree of accuracy.  In addition, the K-fold method was used for cross validation to increase the accuracy.
+```{r}
+modFit <- train(classe ~ ., data = training, method = "rf", trControl = trainControl(method = "repeatedcv", number = 10, repeats = 3))
+```
+
+After a model had been calculated, the estimate out of sample error rate with cross validation could be established by averaging the accuracy of the repeats.  
+```{r}
+modFit$results
+```
+Therefore, the estimate out of sample error rate with cross validation was `r mean(modFit$results[[2]])`.    
+
+The expected out of sample error rate can be established by applying the model to the subdivided testing set.
+```{r}
+predictions <- predict(modFit, newdata = testing)
+confusionMatrix(predictions, testing$classe)
+```
+
+Finally, the 20 different test cases were predicted using the machine learning model (the statement is not evaluated to protect the integrity of the course).
+```{r eval = FALSE}
+predict(modFit, projectdatatest)
+```
